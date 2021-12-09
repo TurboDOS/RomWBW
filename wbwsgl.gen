@@ -1,0 +1,42 @@
+;=====================================================
+;   TURBODOS 1.43 FOR ROMWBW Z80 SBC SINGLE USER
+;=====================================================
+;
+;	===================================
+;	     STANDARD TURBODOS MODULES
+;	===================================
+;
+STDSINGL	; STANDARD SINGLE USER WITHOUT SPOOLER
+NITWBW		; Init Code
+RTCNUL
+;BNKMGR		; BANKED MEMORY MANAGER
+;CPMSUP		; CP/M FUNCTION SUPPORT MODULE
+;MPMSUP		; MPM FUNCTION SUPPORT MODULE
+PATCH		; PATCH MODULE
+;
+;	===================================
+;	          CONSOLE DRIVERS 
+;	===================================
+;
+CONWBW		; CONSOLE DRIVER
+DEBUGWBW
+SOMWBW
+;
+;	===================================
+;	    HARDWARE DEPENDENT DRIVERS
+;	===================================
+;	===================================
+;	      GENERIC DEVICE DRIVERS
+;	===================================
+;
+;LSTPAR		; LIST DRIVER FOR PARALLEL PORT
+;LSTCTS		; LIST DRIVER FOR 9600 BAUD CTS PRINTER
+;
+;
+;	===================================
+;	      DISK RELATED MODULES
+;	===================================
+;
+DSKWBW
+;
+;	*** END OF GEN FILE ***

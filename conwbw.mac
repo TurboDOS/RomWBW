@@ -1,0 +1,103 @@
+	TITLE	TurboDOS Console Driver 
+	SUBTTL	For the RomWBW based systems
+;
+;	CONWBW.MAC
+;	Lodden Services, LLC
+;   Console driver -- Make sure all console out goes to RomWBW Console
+;	
+;
+; Version date: 12/26/20
+;
+; Edit History:
+;
+;12/26/20 jrl	Created CONWBW 
+;
+;
+	.Z80				; for Zilog Mnuemonics
+;
+;INCLUDE	Q6AEQU			; common CPS-Q6A equivalences
+;	INCLUDE	HDMACROS		; special instructions for HD64180
+;
+	NAME	('CONWBW')		; module ID
+	DSEG
+CHARSTORE:	DB	0FFH
+;
+;
+	CSEG			;Locate in prog area
+;
+
+CONDR@::
+	LD	A,E			;GET FUNCTION CODE.
+	CP	10
+	JP	Z,OPTOUT
+	CP	8			;TEST IF ERROR ON.
+	JP	Z,ERRORON
+	CP	9			;TEST FOR ERROR OFF.
+	JP	Z,ERROROFF
+	OR	A			;TEST IF ZERO.
+	JP	Z,CONSTAT	;TEST FOR CONSOLE INPUT.
+	DEC	A			;TEST FOR CONSOLE INPUT.
+	JP	Z,CONIN		;READ THE CHARACTER.
+	DEC	A			;TEST FOR CONSOLE OUTPUT.
+	JP	Z,CONOUT	
+	RET
+;
+;CONSOLE STATUS
+;
+CONSTAT:
+	LD	BC,0200H	; ROMWBW -- CIOIST
+	CALL 0FFF0H
+	CP	0		
+	JP 	NZ,CONSTAT1
+	LD	A,(CHARSTORE)	; SEE IF CHARACTER STORED AWAY ALREADY
+	CP	0FFH
+	JP 	NZ,CONSTAT2		; CHAR STORED
+	XOR	A 				; NO CHAR
+	RET
+	
+CONSTAT1:
+	LD	BC,00			; CIOIN
+	CALL 0FFF0H
+	LD	A,E
+	LD 	(CHARSTORE),A 	; STORE CHAR
+CONSTAT2:
+	LD	C,A				; TurboDOS wants char in CHAR
+	LD	A,0FFH			; have char
+	RET
+;
+;CONSOLE INPUT 
+;
+CONIN:
+	CALL CONSTAT
+	OR 	A
+	JR	Z,CONIN			; WAIT FOR CHAR -- **TODO CALL DELAY FUNCTION
+	LD	A,0FFH
+	LD  (CHARSTORE),A	; char is used
+	LD	A,C
+	RET
+;
+;
+;Console output
+;
+CONOUT:
+	LD	E,C			; move output char in E
+	LD	BC,0100H
+	CALL 0FFF0H
+	RET
+	
+OPTOUT:				; CAN NOT OPT OUTPUT RIGHT NOW
+	XOR	A
+	RET
+;
+
+ERRORON:
+ERROROFF:
+	RET				; don't do anything right now
+	
+	END
+	
+	
+	
+	
+	
+	

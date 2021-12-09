@@ -1,0 +1,534 @@
+	TITLE	TurboDOS Disk Driver for RomWBW
+	SUBTTL	(c)2020 Lodden Services, LLC.
+;
+;	DSKWBW.MAC
+;	(c)2020 Lodden Services, LLC
+;	Disk Driver for access RomWBW HBIOS Disk Driver Functions
+;
+;
+; Version date: 12/26/20
+;
+; Edit History:
+;
+;12/26/20 jrl@lodden.com	Created DSKWBW
+;12/31/20 jrl@lodden.com    handle LBA for IDE like interfaces
+;
+;
+	.Z80				; for Zilog Mnuemonics
+;
+	
+	INCLUDE	DREQUATE		; common driver equivalences
+;
+;
+TRUE 	EQU 	-1
+FALSE 	EQU		NOT TRUE
+;
+DEBUG 	EQU FALSE
+;
+	NAME	('DSKWBW')		; module ID
+	
+	DSEG				; locate in data area
+	
+DMXSPH:					; mutual exclusion semaphore
+	DW	1			; semaphore count
+	DW	$			; semaphore P/D head
+	DW	$-2
+RETSP:	
+	DW	0			; error return stack pointer
+;
+LBA:
+TRACK:	DB	0
+SECTOR: DB	0
+HBNK:	DB	0		; HBIOS bank
+UBNK: 	DB	0		; user bank
+;
+;
+;
+DSTHD:		; 8MB Hard Disk Slice 0
+	DB	5			; BLOCK SIZE  4k
+	DW	2047		; number of 4k blocks on disk
+	DB	4			; NUMBER OF DIRECTORY BLOCKS
+	DB 	2			; sector size 512 bytes 
+	DW	256			; sectors per track
+	DW	1+65		; tracks per disk
+	DW	1			; reserved tracks 
+DSTHD1:		; 8MB Hard Disk Slice 1
+	DB	5			; BLOCK SIZE  4k
+	DW	2047		; number of 4k blocks on disk
+	DB	4			; NUMBER OF DIRECTORY BLOCKS
+	DB 	2			; sector size 512 bytes 
+	DW	256			; sectors per track
+	DW	1+(65*2)		; tracks per disk
+	DW	1+(65*1)			; reserved tracks 
+DSTHD2:		; 8MB Hard Disk Slice 2
+	DB	5			; BLOCK SIZE  4k
+	DW	2047		; number of 4k blocks on disk
+	DB	4			; NUMBER OF DIRECTORY BLOCKS
+	DB 	2			; sector size 512 bytes 
+	DW	256			; sectors per track
+	DW	1+(65*3)		; tracks per disk
+	DW	1+(65*2)			; reserved tracks 
+DSTHD3:		; 8MB Hard Disk Slice 3
+	DB	5			; BLOCK SIZE  4k
+	DW	2047		; number of 4k blocks on disk
+	DB	4			; NUMBER OF DIRECTORY BLOCKS
+	DB 	2			; sector size 512 bytes 
+	DW	256			; sectors per track
+	DW	1+(65*4)		; tracks per disk
+	DW	1+(65*3)			; reserved tracks 
+;
+;
+DSTROM:  ; RomWBW 512k ROM (128KB reserved,  384 ROM Disk)
+	DB	4			; 2K BLOCK SIZE
+	DW	192			; number of 2k blocks
+	DB	4			;  
+	DB	2			; sector size 512 bytes
+	DW	1			; SECTOR/TRACK
+	DW	768			; TRACK 
+	DW	0			; res tracks
+;
+DSTRAM:	; RomWBW RAM Disk --hardcoded to 384K Ram Disk -- **TODO in INIT figure out memsize
+	DB	44			; 2K BLOCK SIZE
+	DW	192			; number of 2k blocks
+	DB	4			;  
+	DB	2			; sector size 512 bytes
+	DW	1			; SECTOR/TRACK
+	DW	768			; TRACK 
+	DW	0			; res tracks
+
+	COMMON	/?INIT?/		; locate in INIT segment
+;
+DSKIN@::
+	LD	BC,0F8F2H				; HBIOS SYSINFO / BNK INFO
+	CALL 0FFF0H				;
+	LD 	A,E
+	LD	(UBNK),A			; Store User Bank #
+	LD	A,D
+	LD	(HBNK),AF
+	;
+	XOR	A	
+	RET
+	
+	
+	CSEG
+	
+
+DSKDR@::
+	LD		HL,DMXSPH		; get mutual exclusion semaphore
+	CALL	WAIT##			; dispatch if necessary
+	CALL	.DSK			; call disk driver
+	PUSH	AF				; save return code
+	LD		HL,DMXSPH		; get mutual exclusion semaphore
+	CALL	SIGNAL##		; segnal process as ready
+	POP		AF				; restore return code
+	RET						; done
+	
+.DSK:	
+	LD	(RETSP),SP		; save error return stack pointer
+	LD	A,(IX+PDRFCN)		; get function number	
+	OR	A			; function number=0?
+	JR	Z,RDDSK			; if so, continue
+	DEC	A			; function number=1?
+	JP	Z,WRDSK			; if so, continue
+	DEC	A			; function number=2?
+	JP	Z,RETDST		; if so, continue
+	DEC	A			; function number=3?
+	JP	Z,RETRDY		; if so, continue
+	DEC	A			; function number=4?
+	JP	Z,FMTDSK		; if so, continue
+	RET
+;
+; READ DISK 
+;
+RDDSK:
+	CALL RWCOMM
+	LD	B,13H		; DIOREAD
+	LD	A,(IX+PDRDRV)	; DRIVE 
+	AND 0FH
+	LD	C,A
+	LD	A,(IX+PDRSC)
+	LD 	E,A 
+	; 
+	LD	HL,0F8EDH
+;
+	;
+;LD	A,(IX+PDRDMA)
+;	LD	L,A
+;	LD	A,(IX+PDRDMA+1)
+;	LD	H,A
+;
+	LD	A,(UBNK)		; set bank
+	LD	D,A
+		;
+	CALL 0FFF0H
+	OR 	A
+	JP	NZ,FATAL
+	;
+	LD	HL,0F8EDH
+	LD	A,(IX+PDRDMA)
+	LD	E,A
+	LD	A,(IX+PDRDMA+1)
+	LD  D,A
+	LD	BC,512
+	LDIR
+	;
+	XOR A
+	RET
+	
+;
+; WRITE DISK 	
+;
+WRDSK:
+	LD	A,(IX+PDRDRV)	; DRIVE 
+	AND	0FH
+	CP	2	
+	JR	Z,WRT0	
+	CP	0
+	JR	Z,WRT0
+	CP	1
+	JP	NZ,FATAL
+	XOR	A			; If to disk 1 ROM drive say ok
+	RET
+;
+
+WRT0:
+	IF DEBUG
+	CALL DEBUGM##
+	DC "IN WRT"
+	ENDIF
+
+	;
+	CALL RWCOMM
+	;
+	LD	DE,0F8EDH
+	LD	A,(IX+PDRDMA)
+	LD	L,A
+	LD	A,(IX+PDRDMA+1)
+	LD  H,A
+	LD	BC,512
+	LDIR
+	;
+	LD	HL,0F8EDH
+	LD	B,14H		; DIOWRITE
+	LD	A,(IX+PDRDRV)	; DRIVE 
+	AND	0FH
+	LD	C,A
+	LD	A,(IX+PDRSC)
+	LD 	E,A 
+	LD	A,(UBNK)		; set bank
+	LD	D,A
+	CALL 0FFF0H
+	OR	A
+	RET Z
+	JP	FATAL
+	
+;
+; DISK READY
+RETRDY:
+	LD	A,(IX+PDRDRV)	; get drive
+	AND 0FH
+	LD	C,A
+	LD	B,10H			; DIOSTATUS
+	CALL 0FFF0H
+	OR	A 		; no error
+	JR	NZ,.NTRDY		;
+	LD	A,0FFH
+	RET
+;
+.NTRDY:
+	IF  DEBUG
+	CALL DEBUGM##
+	DB	13,10
+	DC 	"DSKWBW: NOT READY DRV="
+	LD  A,(IX+PDRDRV)
+	LD	H,0
+	LD	L,A
+	CALL DEBUGH##
+	CALL DEBUGM##
+	DB	13,10+80H
+	ENDIF
+	
+	;	
+	XOR 	A	; SET ERROR
+	RET
+;
+FMTDSK:
+	JP FATAL
+;
+;GET DISK DST TABLE
+;
+RETDST:
+	LD	A,(IX+PDRDRV)
+	AND	0FH
+	LD 	C,A
+	LD	B,18H			; DIOMEDIA
+	LD	E,0
+	CALL 0FFF0H
+	OR	A
+	JP	NZ,DSTERR
+	LD  A,E				; MEDIA ID 
+	CP	4				; HARD DISK?
+	JP	Z,.DSTHD
+	CP	1
+	JP	Z,.DSTROM
+	CP	2
+	JP	Z,.DSTRAM
+
+	IF DEBUG
+	PUSH AF
+	CALL DEBUGM##
+	DB	13,10,"DSKWBW: DIOMEDIA UNSUPPORTED MEDIA TYPE="
+	POP	AF
+	LD	L,A
+	XOR A
+	LD	H,A
+	CALL DEBUGH##
+	CALL DEBUGM##
+	DC 	" DRV="
+	LD	A,(IX+PDRDRV)
+	LD	L,A
+	XOR A
+	LD 	H,A
+	CALL DEBUGD##
+	CALL DEBUGM##
+	DB	13,10+80H
+	ENDIF
+	;
+	XOR A
+	RET
+;
+
+DSTERR:
+	IF DEBUG
+	CALL DEBUGM##
+	DB	13,10
+	DC	"DSKWBW: DIOMEDIA CALL FAILED DRV="
+	LD	A,(IX+PDRDRV)
+	LD	L,A
+	XOR A
+	LD 	H,A
+	CALL DEBUGD##
+	CALL DEBUGM##
+	DB	13,10+80H
+	ENDIF
+	;	
+	LD	A,0
+	RET
+	
+
+.DSTHD:
+	IF DEBUG
+	CALL DEBUGM##
+	DB	13,10
+	DC	"DSKWBW: RETDST HD DRV="
+	LD	A,(IX+PDRDRV)
+	LD	H,0
+	LD	L,A 
+	CALL DEBUGH##
+	CALL DEBUGM##
+	DB 13,10+80H
+	ENDIF
+	;
+	;
+	LD A,(IX+PDRDRV)
+	RRA
+	RRA
+	RRA
+	RRA
+	AND 0FH
+	
+	CP	0
+	JR	Z,.HD0
+	CP	1
+	JR	Z,.HD1
+	CP	2
+	JR	Z,.HD2
+	CP	3
+	JR	Z,.HD3
+	
+	IF DEBUG
+	CALL DEBUGM##
+	DB	13,10,"DSKWBW: HD SLICE OUT OF RANGE"
+	DC 	" DRV="
+	LD	A,(IX+PDRDRV)
+	LD	L,A
+	XOR A
+	LD 	H,A
+	CALL DEBUGD##
+	CALL DEBUGM##
+	DB	13,10+80H
+	ENDIF 
+	;
+	XOR A		; FAIL
+	RET
+	
+	
+.HD0:	
+	LD	HL,DSTHD
+	JR	.DSTX
+.HD1:
+	LD	HL,DSTHD1
+	JR	.DSTX
+.HD2:
+	LD	HL,DSTHD2
+	JR	.DSTX
+.HD3:
+	LD	HL,DSTHD3
+	JR	.DSTX
+
+.DSTROM:
+	IF DEBUG
+	CALL DEBUGM##
+	DB	13,10 
+	DC 	"DSKWBW: RETDST ROM DRV="
+	LD	A,(IX+PDRDRV)
+	LD	H,0
+	LD	L,A 
+	CALL DEBUGD##
+	CALL DEBUGM##
+	DB 13,10+80H
+	ENDIF
+	;
+	LD	HL,DSTROM
+	JR	.DSTX
+.DSTRAM:
+	LD	HL,DSTRAM
+.DSTX:
+	LD	A,0FFH
+	LD	(IX+PDRDST),L
+	LD	(IX+PDRDST+1),H
+	RET
+	
+	
+RWCOMM:	
+;
+	LD	A,(IX+SECTRK)		; handle HD LBA layout in TRK & SEC
+	OR	A
+	JP	Z,RWHD
+	;
+	LD	A,(IX+PDRTRK)		; TRACK HAS LBA 
+	LD	L,A
+	LD	A,(IX+PDRTRK+1)
+	LD	H,A
+;
+
+	LD	A,0			; Zero 0 MID-MSB LBA
+	LD	E,A
+	;
+RW1:
+	LD	A,80H		; use LBA Addressing 
+	LD	D,A
+	;
+	LD	A,(IX+PDRDRV)		; DRIVE NUMBER
+	AND 0FH
+	LD	C,A 
+	LD	B,12H			; DIOSEEK
+;
+
+	IF DEBUG
+	PUSH BC
+	PUSH DE
+	PUSH HL
+;
+	CALL DEBUGM##
+	DB	13,10
+	DC	"DSKWBW: LBA="
+	POP HL
+	PUSH HL
+	CALL DEBUGD##
+	;
+	CALL DEBUGM##
+	DC	" FCN=" 
+	LD	A,(IX+PDRFCN)
+	LD	L,A
+	LD	H,0
+	CALL DEBUGD##
+	;
+	CALL DEBUGM##
+	DC	" CNT="
+	LD 	 A,(IX+PDRSC)
+	LD	L,A
+	LD	H,0
+	CALL DEBUGD##
+	;
+	CALL DEBUGM##
+	DC	" DMA="
+	LD	A,(IX+PDRDMA)
+	LD	L,A
+	LD	A,(IX+PDRDMA+1)
+	LD  H,A
+	CALL DEBUGH##
+	;
+	CALL DEBUGM##
+	DC	" DRV="
+	LD	A,(IX+PDRDRV)
+	LD	H,0
+	LD	L,A
+	CALL DEBUGH##
+	CALL DEBUGM##
+	DB	13,10+80H
+	POP	HL
+	POP DE
+	POP	BC
+	ENDIF
+	
+;
+;
+	CALL 0FFF0H
+	OR	A 
+	RET Z				; OK 
+	JP	FATAL
+;	
+;HD LBA setup
+; LBA is in DE:HL  D will set to 80h to request LBA addressing of the disk
+;  IX+PDRSEC (sector number) is the LSB since the 0-255 sectors/track (bits 0-7 of LBA) in Register L
+;  IX+PDRTRK (Track Number) is the track number is the rest of the LBA in Registers E and H
+;
+RWHD:
+	LD	A,(IX+PDRSEC)
+	LD	L,A
+	LD	A,(IX+PDRTRK)
+	LD	H,A
+	LD	A,(IX+PDRTRK+1)
+	LD	E,A
+	JP	RW1
+;
+; Return TurboDOS Disk Spec Table 
+;
+GETDST:	
+	LD	L,(IX+PDRDST)		; get DST address
+	LD	H,(IX+PDRDST+1)
+	RET				; done
+;
+
+FATAL:	
+	IF DEBUG
+	CALL DEBUGM##
+	DB	13,10
+	DC	"DSKWBW: FATAL FCN="
+	LD	A,(IX+PDRFCN)
+	LD  L,A
+	XOR A
+	LD	H,A
+	CALL DEBUGD##
+	CALL DEBUGM##
+	DC	" DRV="
+	LD	A,(IX+PDRDRV)
+	LD	L,A
+	XOR A
+	LD 	H,A
+	CALL DEBUGD##
+	CALL DEBUGM##
+	DB	13,10+80H
+	ENDIF
+	;
+	;	
+	LD	SP,(RETSP)		; restore stack pointer
+	LD	A,0FFH			; return error code
+	RET		
+
+	
+;
+;
+	END				; End of DSKWBW.MAC
+	

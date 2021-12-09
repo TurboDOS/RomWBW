@@ -1,0 +1,135 @@
+	TITLE	TurboDOS DEBUG SUPPORT For the RomWBW based systems
+	SUBTTL	(c)2020 Lodden Services, LLC.
+;
+;	DEBUGWBW.MAC
+;	(c)2020 Lodden Services, LLC
+;   Debug Support 
+;	These routines are compatible with late 1980s Lodden Technoglogy/Services drivers and other 
+;   TurboDOS OEM standards of the day for calling debug services
+;
+;
+; Version date: 12/27/20
+;
+; Edit History:
+;
+;12/27/20 jrl@lodden.com	Created DEBUGWBW based on Lodden Services 1985 TurboDOS debug code
+;
+;
+	.Z80				; for Zilog Mnuemonics
+;
+	NAME	('DEBUG')		; module ID
+	
+;
+	COMMON	/?BANK?/		; locate in common memory so bank switch code can call if needed
+;
+; Output Decimal number from HL pair
+;
+DEBUGD::
+	PUSH	AF		;SAVE REGISTERS
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	B,0		;CLEAR LEADING ZERO FLAG
+	LD	DE,10000	;DISPLAY TEN THOUSANDS DIGIT
+	CALL	..DO
+	LD	DE,1000		;DISPLAY THOUSANDS DIGIT
+	CALL	..DO
+	LD	DE,100		;DISPLAY HUNDREDS DIGIT
+	CALL	..DO
+	LD	DE,10		;DISPLAY TENS DIGIT
+	CALL	..DO
+	INC	B		;INCREMENT LEADING ZERO FLAG
+	LD	DE,1		;DISPLAY UNITS DIGIT
+	CALL	..DO
+	POP	HL		;RESTORE REGISTERS
+	POP	DE
+	POP	BC
+	POP	AF
+	CALL	DEBUGM		;DISPLAY "D"
+	DB	" D  "," "+80H
+	RET			;DONE
+;
+..DO:	LD	C,-1		;PRESET QUOTENT
+	OR	A		;CLEAR CARRY FLAG
+..DL:	INC	C		;INCREMENT QUOTENT
+	SBC	HL,DE		;SUBTRACT DIVISOR
+	JR	NC,..DL		;UNTIL UNDERFLOW
+	ADD	HL,DE		;RESTORE UNDERFLOW
+	LD	A,C		;GET QUOTENT
+	OR	A		;QUOTENT=0?
+	JR	NZ,..DD		;IF NOT, DISPLAY DIGIT
+	INC	B
+	DEC	B		;LEADING ZERO FLAG SET?
+	RET	Z		;IF NOT, DONE
+;
+..DD:	ADD	A,"0"		;ADD ASCII BIAS
+	CALL	DEBUGO		;OUTPUT CHARACTER
+	INC	B		;INCREMENT LEADING ZERO FLAG
+	RET			;DONE
+;
+; Output HEX number from HL pair
+;
+DEBUGH::
+	PUSH	AF		;SAVE AF-REG
+	LD	A,H		;GET MSB OF VALUE
+	CALL	..HEXO		;DISPLAY MSB IN HEX
+	POP	AF
+;
+; Output Hex number from L register
+;
+DEBUGL::
+	PUSH	AF
+	LD	A,L		;GET LSB OF VALUE
+	CALL	..HEXO		;DISPLAY LSB IN HEX
+	CALL	DEBUGM		;DISPLAY "H"
+	DB	" ","H"+80H
+	POP	AF		;RESTORE AF-REG
+	RET			;DONE
+;
+..HEXO:	
+	PUSH	AF		;SAVE VALUE
+	RRCA			;SHIFT MSN TO LSN
+	RRCA	
+	RRCA	
+	RRCA	
+	CALL	..HEXN		;DISPLAY MSN IN HEX
+	POP	AF		;RESTORE VALUE
+;
+..HEXN:	
+	AND	0FH		;EXTRACT NIBBLE
+	ADD	A,"0"		;ADD ASCII BIAS
+	CP	"9"+1		;VALID HEX DIGIT?
+	JR	C,DEBUGO		;IF SO, CONTINUE
+;
+	ADD	A,"A"-("9"+1)	;ELSE, ADD LETTER BIAS
+;
+;Output Char in A 
+;
+;
+DEBUGO::
+	LD	BC,0100H		; CIOOUT
+	LD	E,A
+	CALL 0FFF0H
+	RET
+;
+;  Output String from PC stored in stack until 8th bit set in string.
+;  This function is like TurboDOS DMS## routine 
+;  but does not use console driver or any TurboDOS services
+;
+DEBUGM::
+	EX	(SP),HL		;GET MESSAGE ADDRESS
+	PUSH	AF		;SAVE AF-REG
+;
+..L:	
+	LD	A,(HL)		;ELSE, GET MESSAGE CHARACTER
+	RES	7,A			; strip parity bit
+	CALL	DEBUGO		;OUTPUT CHARACTER
+	BIT	7,(HL)		;LAST CHARACTER OF MESSAGE?
+	INC	HL			; bump pointer
+	JR	Z,..L		;IF NOT, CONTINUE
+;
+	POP	AF		;ELSE, RESTORE AF-REG
+	EX	(SP),HL		;SET UP RETURN ADDRESS
+	RET			;DONE
+;
+	END	

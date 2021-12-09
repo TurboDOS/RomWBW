@@ -1,0 +1,71 @@
+	TITLE	TurboDOS Initialization Routines
+	SUBTTL	For the RomWBW based systems
+;
+;	NITWBW.MAC
+;	Lodden Services, LLC
+;	TurboDOS Initilization routines
+;	For the RomWBW based systems
+;
+; Version date: 12/26/20
+;
+; Edit History:
+;
+;12/26/20 jrl	Created NITWBW based off base TurboDOS examples
+;
+;
+	.Z80				; for Zilog Mnuemonics
+;
+;
+	NAME	('NITWBW')		; module ID
+;
+	COMMON	/?INIT?/		; locate in INIT segment
+;
+HDWNIT::
+	CALL	WBWNIT			; initialize interrupt vector table
+	CALL	BNKNIT##		; initialize bank 1 pointers
+	CALL	SPINIT##		; initialize serial/parallel driver
+	CALL	RTCNIT##		; initialize RTC driver
+;
+	CALL	DSKINA##		; initialize disk driver A:
+	CALL	DSKINB##		; initialize disk driver B:
+	CALL	DSKINC##		; initialize disk driver C:
+	CALL	DSKIND##		; initialize disk driver D:
+;
+	CALL	CKTINA##		; initialize Network Driver(s).
+	CALL	CKTINB##
+	CALL	CKTINC##
+	CALL	CKTIND##
+;
+	CALL	DEBUGM##
+	DB		"done.",13,10+80H
+	
+	RET				; finished
+;
+; Do anything Special to setup RomWBW for TurboDOS running
+;
+WBWNIT:	
+	CALL DEBUGM##
+	DB	13,10
+	DC 	"Starting Init.."
+
+	RET				; return to caller
+;
+; -- Not currently used 
+; intialize interrupt vector table entry whose vector number is passed in A
+; and pointer to ISR is passed in HL.
+;
+;INTNIT::PUSH	DE			; save used register
+;	PUSH	HL			; save ISR pointer
+;	LD	L,A			; convert vector number to table offset
+;	LD	H,0
+;	ADD	HL,HL
+;	LD	DE,VECBAS		; get base of table
+;	ADD	HL,DE			; index into vector table
+;	POP	DE			; get ISR pointer back
+;	LD	(HL),E			; store pointer to table
+;	INC	HL
+;	LD	(HL),D
+;	POP	DE			; restore original DE
+;	RET				; return to caller
+;
+	END				; End of NITWBW.MAC

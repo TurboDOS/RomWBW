@@ -1,0 +1,161 @@
+	TITLE	TurboDOS bank switch driver for the RomWBW
+	SUBTTL	(c)2020 Lodden Services, LLC.
+;
+;	BNKWBW.MAC
+;   (c)2020 Lodden Services, LLC.
+;
+; Uses HBIOS memory manager calls to uses whatever bank HBIOS is in minus 2 for TurboDOS bank 1
+;
+;
+		INCLUDE	Z180MAC
+		INCLUDE Z180EQU
+;
+;
+; Version date: 12/28/20
+;
+		.Z80				; for Zilog mnuemonics
+;
+		NAME	('BNKWBW')		; module name
+;
+; Edit history:
+; 12/28/20 jrl@lodden.com  Based on Lodden Sevices's 1985 TurboDOS bank switch driver 
+;
+;
+LED		EQU		0CH
+
+		COMMON	/?BANK?/		; locate in common memory
+
+BNKNIT::
+		LD	(SPSAVE),SP		;SAVE STACK POINTER
+		LD	SP,AUXSTK		;SET UP AUXILLIARY STACK
+		;
+		LD	BC,0F8F2H		; Get SYSINFO Bank Info
+		CALL 0FFF0H
+		LD	A,D				; D - Has HBIOS Bank # 
+		;
+		LD	(BIOSBNK),A
+		INC	A
+		LD	(BOOTBNK),A   	; (BANK 0 from TurboDOS point of view)
+		DEC	A
+		DEC	A
+		DEC A
+		LD	(TDOSBNK),A		;  bank 1 for TurboDOS is BIOS-2 bank 
+		;
+		LD	A,1
+		CALL BANK			; select bank 1
+	; Allow HBIOS calls to work from bank 1
+		LD	A,0C3H			; "JMP" instruction
+		LD	HL,0FFF0H		; HBIOS Vector
+		LD	(9),HL
+		LD	(8),A
+		LD	A,0
+		CALL BANK 			; select bank 0 
+		;
+		CALL DEBUGM##
+		DB	13,10
+		DC	"BNKWBW: BIOSBNK="
+		LD	A,(BIOSBNK)
+		LD	L,A
+		CALL DEBUGL##
+		CALL DEBUGM##
+		DC 	" BOOTBNK=" 
+		LD	A,(BOOTBNK)
+		LD	L,A
+		CALL DEBUGL##
+		CALL DEBUGM##
+		DC	" TDOS BNK1="
+		LD	A,(TDOSBNK)
+		LD	L,A
+		CALL DEBUGL##
+		CALL DEBUGM##
+		DC	"SELBNK ADDR="
+		LD	HL,SELBNK
+		CALL DEBUGH##
+		CALL DEBUGM##
+		DB	13,10+80H
+;
+		;		
+		LD	SP,(SPSAVE)		;RESTORE STACK POINTER
+		RET
+
+;
+;
+; TurboDOS calls this with A = to bank number  (0 or 1)
+; Must not trash any registers but A
+;
+SELBNK::
+	PUSH BC		; Must not change any REG but A 
+	PUSH DE
+	PUSH HL
+	CALL BANK
+	POP	 HL		; restore all regs
+	POP  DE
+	POP	 BC
+	RET
+;
+BANK:
+	OR	A			; requesting bank 0?
+	JR	NZ,..B1			; if no, jump to bank 1 select
+;
+	;
+;	CALL DEBUGM##
+;	DB	13,10
+;	DC "BNKWBW: BANK 0 SET BNK="
+;	LD	A,(BOOTBNK)
+;	LD	L,A
+;	CALL DEBUGL##
+;	CALL DEBUGM##
+;	DB	13,10+80H
+	;
+	LD	A,(BOOTBNK)
+	LD	C,A
+	LD	B,0F2H		; SET BANK
+	CALL 0FFF0H
+;	PUSH BC
+;	CALL DEBUGM##
+;	DB	13,10
+;	DC	"BNKWBW: NOW BANK 0 -- LAST BANK ID: "
+;	POP  HL
+;	CALL DEBUGL##
+;	CALL DEBUGM##
+;	DB	13,10+80H
+	
+	RET
+;
+..B1:	
+;	CALL DEBUGM##
+;	DB	13,10
+;	DC "BNKWBW: BANK 1 SET BNK="
+;	LD	A,(TDOSBNK)
+;	LD	L,A
+;	CALL DEBUGL##
+;	CALL DEBUGM##
+;	DB	13,10+80H
+	;
+	LD	A,(TDOSBNK)
+	LD	C,A
+	LD	B,0F2H		; SET BANK
+	CALL 0FFF0H
+;	PUSH BC
+;	CALL DEBUGM##
+;	DB	13,10
+;	DC	"BNKWBW: NOW BANK 1 -- LAST BANK ID: "
+;	POP  HL
+;	CALL DEBUGL##
+;	CALL DEBUGM##
+;	DB	13,10+80H
+;	
+	RET
+	
+;
+INTADDR:	DW	0		; Int chain ISR exit
+TICCTR:		DB	0
+BIOSBNK:	DB	0
+TDOSBNK:	DB	0
+BOOTBNK:	DB	0
+;
+;
+SPSAVE:	DW	0			;STACK POINTER SAVE AREA
+		DS	32			;AUXILLIARY STACK AREA
+AUXSTK:					;TOP OF AUXILLIARY STACK AREA
+	END

@@ -1,0 +1,38 @@
+;==========================================================================
+;	TURBODOS 1.43 FOR ROMWBW SBC SINGLE USER
+;==========================================================================
+;
+SRHDRV = 0FF		; SEARCH SYSTEM DISK FOR COMMAND FILES
+ATNCHR = 01E		; MAKE ATTENTION CTRL-SHIFT-6 ^^
+CLPCHR = 03E		; COMMAND PROMPT ">"
+;
+;  	PRINTER ASSIGNMENTS
+;
+;PTRAST = 00,LSTDRA	; PRINTER A
+;PRTMOD = 0 			; NO SPOOLER
+;
+DSKAST = 00,DSKDRA,01,DSKDRA,02,DSKDRA,03,DSKDRA,04,DSKDRA
+;
+MEMRES = (0400)
+;
+NMBUFS = 2		; NUMBER OF BUFFERS
+BUFSIZ = 2		; DEFAULT BUFFER SIZE (1024 BYTE BUFFERS)
+AUTUSR = 080		; PRIVILEDGED USER LOGON
+;
+;==================================================
+;	Turbo DOS 1.43 Patches for Z-80
+;==================================================
+;
+; PATCH:        1.43-01   -  Z80 VERSION
+; DATE:		20-JAN-87
+; APPLICATION:	ALL CONFIGURATIONS CONTAINING 'FILMGR' MODULE.
+; PURPOSE:	TO CORRECT A PROBLEM WITH C-FCN 15 WHEN USED TO
+;		RETRIEVE A DIRECTORY S1 BYTE OF PSUEDO FILES
+;		$.DSK AND $.DIR
+;
+OPNFIL+3D = PATCH
+PATCH     = 0CD,CKSPFN,03E,000,0C2,OCECOM,033,033,0C3,OPNFIL+48
+;
+;
+
+;	*** END OF SOFTWARE 2000, INC. PATCHES ***

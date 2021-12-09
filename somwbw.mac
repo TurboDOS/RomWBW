@@ -1,0 +1,61 @@
+	TITLE	Sign-on Message Area
+	.Z80				; use Zilog mnuemonics
+;
+	NAME	('SOMWBW')		; module ID
+;
+	INCLUDE DREQUATE		; oommon OS equivalences
+;
+	COMMON	/?INIT?/		; locate in init segment
+;
+USRSOM::
+	REPT	8			; allocate 80 user bytes
+	DB	0,0,0,0,0,0,0,0,0,0
+	ENDM
+;
+	DB	ACR,ALF
+	DB	"Circuit: "
+CKTNO:	DB	0,0,0			; range = 0-255
+;
+	DB	", Node: "
+NODNO:	DB	0,0,0			; range = 0-255
+;
+	DB	"$"			; string terminate char
+;
+; Entry point to patch circuit number.
+; ACC = circuit number.
+;
+PTMCKT::
+	LD	HL,CKTNO		; get msg offset
+	JR	DECMSG			; do common code
+;
+PTMNOD::
+	LD	HL,NODNO		; get msg offset
+	JR	DECMSG			; do common code
+;
+DECMSG:	LD	E,0			; clear zero print flag
+	LD	C,100
+	CALL	DM1			; write 100's digit
+	LD	C,10
+	CALL	DM1			; write 10's digit
+	LD	C,1
+	LD	E,-1			; set zero print flag
+DM1:	LD	B,-1			; preset dividend reg
+DM2:	INC	B			; bump dividend
+	SUB	C			; try the subtract
+	JR	NC,DM2			; if successful, continue
+	ADD	A,C			; get back the remainder
+	LD	C,A			; hold remainder in reg
+	LD	A,B			; get dividend
+	OR	A			; zero results?
+	JR	NZ,DM3			; if not, continue
+	INC	E
+	DEC	E			; zero print enabled?
+	JR	Z,DMX			; if not, continue
+DM3:	ADD	A,"0"			; add ASCII bias
+	LD	(HL),A			; move to message area
+	INC	HL			; bump pointer
+	LD	E,-1			; set zero print flag
+DMX:	LD	A,C			; get back the remainder
+	RET				; all done
+;
+	END
